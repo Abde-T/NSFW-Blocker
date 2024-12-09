@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "NSFW Blocker",
+  "version": "0.0.1",
+  "description": "Blur URLs and words identified as NSFW.",
+  "permissions": ["storage", "scripting", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["blocked.html", "nsfw-words.json", "nsfw-urls.json"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

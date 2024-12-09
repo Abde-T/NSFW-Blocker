@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <form class="form">
+      <div class="title">block Words or URLs</div>
+      <input
+        class="input"
+        type="text"
+        id="unblock-word"
+        placeholder="Enter word to block"
+      />
+      <input
+        class="input"
+        type="text"
+        id="unblock-url"
+        placeholder="Enter URL to block"
+      />
+      <button class="button-confirm" id="save">Save</button>
+
+      <div class="title">Unblock Words or URLs</div>
+      <div class="wrapper">
+        <input
+          class="input_"
+          type="text"
+          id="unblock-word"
+          placeholder="Enter word to unblock"
+        />
+        <button class="button-confirm" id="unblock-word-button">
+          Unblock 
+        </button>
+      </div>
+      <div class="wrapper">
+        <input
+          class="input_"
+          type="text"
+          id="unblock-url"
+          placeholder="Enter URL to unblock"
+        />
+        <button class="button-confirm" id="unblock-url-button">
+          Unblock 
+        </button>
+      </div>
+    </form>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
