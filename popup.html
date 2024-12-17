@@ -9,13 +9,13 @@
       <input
         class="input"
         type="text"
-        id="unblock-word"
+        id="blocked-word"
         placeholder="Enter word to block"
       />
       <input
         class="input"
         type="text"
-        id="unblock-url"
+        id="blocked-url"
         placeholder="Enter URL to block"
       />
       <button class="button-confirm" id="save">Save</button>
@@ -44,6 +44,14 @@
         </button>
       </div>
     </form>
+
+     <!-- Modal -->
+     <div id="modal" class="modal">
+      <div class="modal-content">
+        <span class="modal-close" id="modal-close">&times;</span>
+        <p id="modal-message"></p>
+      </div>
+    </div>
 
     <script src="popup.js"></script>
   </body>

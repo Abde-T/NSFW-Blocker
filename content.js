@@ -1,62 +1,100 @@
+// Function to fetch blocked words
 async function fetchBlockedWords() {
-  const fileURL = chrome.runtime.getURL("nsfw-words.json");
-  try {
-    // Fetch blocked words from the JSON file
-    const response = await fetch(fileURL);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch: ${response.statusText}`);
-    }
-    const blockedWordsFromFile = await response.json();
+  if (chrome?.runtime?.id) {
+    const fileURL = chrome.runtime.getURL("nsfw-words.json");
+    try {
+      // Fetch blocked words from the JSON file
+      const response = await fetch(fileURL);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch: ${response.statusText}`);
+      }
+      const blockedWordsFromFile = await response.json();
 
-    // Fetch additional blocked words from Chrome storage
-    const blockedWordsFromStorage = await new Promise((resolve) => {
-      chrome.storage.sync.get("blockedWords", (result) => {
-        resolve(result.blockedWords || []);
+      // Fetch additional blocked words from Chrome storage
+      const blockedWordsFromStorage = await new Promise((resolve) => {
+        chrome.storage.sync.get("blockedWords", (result) => {
+          if (chrome.runtime.lastError) {
+            console.error(
+              "Error accessing storage:",
+              chrome.runtime.lastError.message
+            );
+            return;
+          }
+          resolve(result.blockedWords || []);
+        });
       });
-    });
 
-    console.log("blockedWordsFromStorage", blockedWordsFromStorage);
+      console.log("blockedWordsFromStorage", blockedWordsFromStorage);
 
-    // Combine both sources (file + Chrome storage) and return the result
-    const allBlockedWords = [
-      ...new Set([...blockedWordsFromFile, ...blockedWordsFromStorage]),
-    ]; // Remove duplicates
-    return allBlockedWords;
-  } catch (error) {
-    console.error("Error fetching blocked words:", error);
-    return [];
+      // Combine both sources (file + Chrome storage) and return the result
+      const allBlockedWords = [
+        ...new Set([...blockedWordsFromFile, ...blockedWordsFromStorage]),
+      ]; // Remove duplicates
+      return allBlockedWords;
+    } catch (error) {
+      console.error("Error fetching blocked words:", error);
+      return [];
+    }
+  } else {
+    console.error("Chrome runtime context is invalidated.");
   }
 }
-
+// Function to fetch blocked URLs
 async function fetchBlockedUrls() {
-  const fileURL = chrome.runtime.getURL("nsfw-urls.json");
-  try {
-    // Fetch blocked URLs from the JSON file
-    const response = await fetch(fileURL);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch: ${response.statusText}`);
-    }
-    const blockedUrlsFromFile = await response.json();
+  if (chrome?.runtime?.id) {
+    const fileURL = chrome.runtime.getURL("nsfw-urls.json");
+    try {
+      // Fetch blocked URLs from the JSON file
+      const response = await fetch(fileURL);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch: ${response.statusText}`);
+      }
+      const blockedUrlsFromFile = await response.json();
 
-    // Fetch additional blocked URLs from Chrome storage
-    const blockedUrlsFromStorage = await new Promise((resolve) => {
-      chrome.storage.sync.get("blockedUrls", (result) => {
-        resolve(result.blockedUrls || []);
+      // Fetch additional blocked URLs from Chrome storage
+      const blockedUrlsFromStorage = await new Promise((resolve) => {
+        chrome.storage.sync.get("blockedUrls", (result) => {
+          resolve(result.blockedUrls || []);
+        });
       });
-    });
 
-    console.log("blockedUrlsFromStorage", blockedUrlsFromStorage);
+      console.log("blockedUrlsFromStorage", blockedUrlsFromStorage);
 
-    // Combine both sources (file + Chrome storage) and return the result
-    const allBlockedUrls = [
-      ...new Set([...blockedUrlsFromFile, ...blockedUrlsFromStorage]),
-    ]; // Remove duplicates
-    return allBlockedUrls;
-  } catch (error) {
-    console.error("Error fetching blocked URLs:", error);
-    return [];
+      // Combine both sources (file + Chrome storage) and return the result
+      const allBlockedUrls = [
+        ...new Set([...blockedUrlsFromFile, ...blockedUrlsFromStorage]),
+      ]; // Remove duplicates
+      return allBlockedUrls;
+    } catch (error) {
+      console.error("Error fetching blocked URLs:", error);
+      return [];
+    }
+  } else {
+    console.error("Chrome runtime context is invalidated.");
   }
 }
+
+// Listener to dynamically update data on chrome.storage change
+chrome.storage.onChanged.addListener(async (changes, area) => {
+  if (area === "sync") {
+    if (changes.blockedWords) {
+      await fetchBlockedWords();
+      await scanForBlockedWords();
+    } else {
+      console.log(
+        "Skipping blockedWords scan because scanForBlockedURLs is running."
+      );
+    }
+  }
+  if (changes.blockedUrls) {
+    await fetchBlockedUrls();
+    await scanForBlockedURLs();
+  } else {
+    console.log(
+      "Skipping blockedUrls scan because scanForBlockedWords is running."
+    );
+  }
+});
 
 function blurElement(element) {
   if (element && element.style) {
@@ -73,24 +111,14 @@ async function redirectIfOnBlockedSite() {
 
   // Check if the current hostname matches any blocked URL
   console.log("currentHostname", currentHostname);
-  console.log(
-    "block",
-    BLOCKED_URLS.some((blockedUrl) =>
-      currentHostname.includes(blockedUrl.toLowerCase())
-    )
-  );
 
-  if (
-    BLOCKED_URLS.some((blockedUrl) =>
-      currentHostname.includes(blockedUrl.toLowerCase())
-    )
-  ) {
-    console.log("Redirecting to blocked.html due to a blocked site...");
-    console.log(
-      "Redirecting to:",
-      new URL("blocked.html", window.location.origin).href
-    );
+  const isBlocked = BLOCKED_URLS.some((blockedUrl) => {
+    const normalizedBlockedUrl = blockedUrl.toLowerCase();
+    return currentHostname === normalizedBlockedUrl;
+  });
+  console.log("block", isBlocked);
 
+  if (isBlocked) {
     window.location.href = chrome.runtime.getURL("blocked.html"); // Redirect to the warning page
   }
 }
@@ -101,34 +129,32 @@ async function scanForBlockedURLs() {
   const links = document.querySelectorAll("a"); // Select all anchor elements
 
   links.forEach((link) => {
-    let linkHref;
-
     try {
-      // Extract hostname from the link
-      linkHref = new URL(link.href).hostname.toLowerCase();
-    } catch (error) {
-      console.debug("Skipping invalid link:", link.href);
-      return; // Skip invalid links
-    }
+      const linkHostname = new URL(link.href).hostname.toLowerCase(); // Extract hostname
 
-    // Check if the link's hostname matches any blocked URL
-    if (
-      BLOCKED_URLS.some((blockedUrl) => {
-        linkHref.includes(blockedUrl.toLowerCase());
-      })
-    ) {
-      console.log(`Blocked link detected: ${linkHref}`);
-      link.addEventListener("click", (event) => {
-        event.preventDefault();
-        console.log(`Redirecting from blocked link: ${linkHref}`);
-        window.location.href = chrome.runtime.getURL("blocked.html"); // Redirect on click
+      const isBlocked = BLOCKED_URLS.some((blockedUrl) => {
+        const normalizedBlockedUrl = blockedUrl.toLowerCase();
+        return linkHostname === normalizedBlockedUrl; // Ensure exact hostname match
       });
 
-      // Blur the link
-      // blurElement(link);
+      if (isBlocked) {
+        console.log(`Blocked link detected: ${link.href}`);
+        link.addEventListener("click", (event) => {
+          event.preventDefault(); // Prevent navigation
+          console.log(`Redirecting from blocked link: ${link.href}`);
+          window.location.href = chrome.runtime.getURL("blocked.html");
+        });
+
+        // Optional: Blur or visually mark blocked links
+        blurElement(link);
+      }
+    } catch (error) {
+      // Handle invalid URLs gracefully
+      console.log("Invalid URL detected in link:", link.href);
     }
   });
 }
+
 async function scanForBlockedWords() {
   const BLOCKED_WORDS = await fetchBlockedWords();
   const wordRegex = new RegExp(`\\b(${BLOCKED_WORDS.join("|")})\\b`, "gi");
@@ -162,7 +188,7 @@ async function scanForBlockedWords() {
         if (parentElement) {
           const newElement = document.createElement("span");
           newElement.innerHTML = blurredHTML;
-          parentElement.replaceChild(newElement, node);
+          parentElement?.replaceChild(newElement, node);
         }
       }
     }
@@ -208,7 +234,7 @@ function blurImage(element) {
   const existingWrapper = element.parentNode.classList.contains("blur-wrapper");
 
   if (existingWrapper) {
-    console.warn("Button already exists for this image, skipping creation.");
+    console.log("Button already exists for this image, skipping creation.");
     return; // Exit if the wrapper is already present
   }
 
@@ -292,8 +318,8 @@ scanForBlockedWords();
 const observer = new MutationObserver(
   throttle(async () => {
     await redirectIfOnBlockedSite(); // Check if the user is already on a blocked site
-    await scanForBlockedURLs(); // Scan and handle blocked URLs in links
     scanForBlockedWords();
+    await scanForBlockedURLs(); // Scan and handle blocked URLs in links
   }, 500) // Throttle scans to once every 500ms
 );
 observer.observe(document.body, { childList: true, subtree: true });

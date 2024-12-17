@@ -1,72 +1,120 @@
-
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("DOMContentLoaded event fired.");
+  console.log("Popup initialized.");
 
-  // Retrieve and display the current blocked words and URLs from Chrome Storage
-  chrome.storage.sync.get(["blockedWords", "blockedUrls"], (result) => {
-    const blockedWords = result.blockedWords || [];
-    const blockedUrls = result.blockedUrls || [];
+  // Modal helper functions
+  const showModal = (message) => {
+    const modal = document.getElementById("modal");
+    const modalMessage = document.getElementById("modal-message");
+    modalMessage.textContent = message;
+    modal.style.display = "block";
+    console.log("Modal is now visible");
+  };
 
-    document.getElementById("blocked-words").value = blockedWords.join("\n");
-    document.getElementById("blocked-urls").value = blockedUrls.join("\n");
+  const hideModal = () => {
+    const modal = document.getElementById("modal");
+    modal.style.display = "none";
+  };
+
+  // Event listener to close the modal
+  document.getElementById("modal-close").addEventListener("click", hideModal);
+  window.addEventListener("click", (event) => {
+    const modal = document.getElementById("modal");
+    if (event.target === modal) {
+      hideModal();
+    }
   });
 
-  const saveButton = document.getElementById("save");
+  // Helper functions
+  const getById = (id) => document.getElementById(id);
+  const saveToStorage = (key, value, callback = () => {}) => {
+    console.log([key], value);
 
-  saveButton.addEventListener("click", () => {
-    const blockedWords = document
-      .getElementById("blocked-words")
+    chrome.storage.sync.set({ [key]: value }, callback);
+  };
+  const getFromStorage = (key, callback) => {
+    chrome.storage.sync.get([key], (result) => callback(result[key] || []));
+  };
+
+  // Update text area with current storage values
+  const initializeTextAreas = () => {
+    getFromStorage("blockedWords", (words) => {
+      getById("blocked-word").value = words.join("\n");
+    });
+    getFromStorage("blockedUrls", (urls) => {
+      getById("blocked-url").value = urls.join("\n");
+    });
+  };
+
+  // Save words/URLs to storage
+  const saveItems = (key, inputId) => {
+    const items = getById(inputId)
       .value.split("\n")
-      .map(word => word.trim())
-      .filter(word => word !== "");
+      .map((item) => item.trim())
+      .filter((item) => item);
 
-    const blockedUrls = document
-      .getElementById("blocked-urls")
-      .value.split("\n")
-      .map(url => url.trim())
-      .filter(url => url !== "");
+    if (items.length === 0) {
+      showModal(`No items to add. Please enter valid words or URLs.`);
+      return;
+    }
 
-    // Save to Chrome Storage
-    chrome.storage.sync.set(
-      { blockedWords, blockedUrls },
-      () => {
-        console.log("Blocked words and URLs saved successfully.");
-        alert("Settings saved!");
+    saveToStorage(key, items, () => {
+      // Verify the items were successfully saved
+      getFromStorage(key, (savedItems) => {
+        if (JSON.stringify(savedItems) === JSON.stringify(items)) {
+          showModal(`Items successfully added.`);
+        } else {
+          showModal(`Error: Failed to save items. Please try again.`);
+        }
+      });
+    });
+  };
+  // Remove a specific word/URL from storage
+  const unblockItem = (key, inputId) => {
+    const itemToUnblock = getById(inputId).value.trim();
+    if (!itemToUnblock) {
+      showModal(`Please enter a valid word or URL to unblock.`);
+      return;
+    }
+
+    getFromStorage(key, (items) => {
+      if (!items.includes(itemToUnblock)) {
+        showModal(`${itemToUnblock} not found in the blocked list.`);
+        return;
       }
-    );
-  });
 
-  const unblockWordButton = document.getElementById("unblock-word-button");
-  unblockWordButton.addEventListener("click", () => {
-    const wordToUnblock = document.getElementById("unblock-word").value.trim();
-    if (!wordToUnblock) return;
-
-    chrome.storage.sync.get("blockedWords", (result) => {
-      let blockedWords = result.blockedWords || [];
-      blockedWords = blockedWords.filter((word) => word !== wordToUnblock);
-
-      // Save the updated list to Chrome Storage
-      chrome.storage.sync.set({ blockedWords }, () => {
-        console.log(`Word "${wordToUnblock}" unblocked.`);
-        alert(`Word "${wordToUnblock}" has been unblocked.`);
+      const updatedItems = items.filter((item) => item !== itemToUnblock);
+      saveToStorage(key, updatedItems, () => {
+        // Verify the item was successfully removed
+        getFromStorage(key, (newItems) => {
+          if (!newItems.includes(itemToUnblock)) {
+            showModal(`${itemToUnblock} has been successfully removed.`);
+          } else {
+            showModal(
+              `Error: Failed to remove ${itemToUnblock}. Please try again.`
+            );
+          }
+        });
       });
     });
+  };
+
+  // Event listeners
+  getById("save").addEventListener("click", (event) => {
+    event.preventDefault();
+    saveItems("blockedWords", "blocked-word");
+    saveItems("blockedUrls", "blocked-url");
   });
 
-  const unblockUrlButton = document.getElementById("unblock-url-button");
-  unblockUrlButton.addEventListener("click", () => {
-    const urlToUnblock = document.getElementById("unblock-url").value.trim();
-    if (!urlToUnblock) return;
-
-    chrome.storage.sync.get("blockedUrls", (result) => {
-      let blockedUrls = result.blockedUrls || [];
-      blockedUrls = blockedUrls.filter((url) => url !== urlToUnblock);
-
-      // Save the updated list to Chrome Storage
-      chrome.storage.sync.set({ blockedUrls }, () => {
-        console.log(`URL "${urlToUnblock}" unblocked.`);
-        alert(`URL "${urlToUnblock}" has been unblocked.`);
-      });
-    });
+  getById("unblock-word-button").addEventListener("click", (event) => {
+    event.preventDefault();
+    unblockItem("blockedWords", "unblock-word");
   });
+
+  getById("unblock-url-button").addEventListener("click", (event) => {
+    event.preventDefault();
+    unblockItem("blockedUrls", "unblock-url");
+  });
+
+  // Initialize text areas on load
+  // initializeTextAreas();
 });
