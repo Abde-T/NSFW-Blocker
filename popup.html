@@ -5,7 +5,13 @@
   </head>
   <body>
     <form class="form">
-      <div class="title">block Words or URLs</div>
+      <div class="header_wrapper">
+        <div class="title">block Words or URLs</div>
+        <label class="toggle-switch">
+          <input type="checkbox" checked />
+          <span class="slider"></span>
+        </label>
+      </div>
       <input
         class="input"
         type="text"
@@ -28,9 +34,7 @@
           id="unblock-word"
           placeholder="Enter word to unblock"
         />
-        <button class="button-confirm" id="unblock-word-button">
-          Unblock 
-        </button>
+        <button class="button-confirm" id="unblock-word-button">Unblock</button>
       </div>
       <div class="wrapper">
         <input
@@ -39,14 +43,12 @@
           id="unblock-url"
           placeholder="Enter URL to unblock"
         />
-        <button class="button-confirm" id="unblock-url-button">
-          Unblock 
-        </button>
+        <button class="button-confirm" id="unblock-url-button">Unblock</button>
       </div>
     </form>
 
-     <!-- Modal -->
-     <div id="modal" class="modal">
+    <!-- Modal -->
+    <div id="modal" class="modal">
       <div class="modal-content">
         <span class="modal-close" id="modal-close">&times;</span>
         <p id="modal-message"></p>

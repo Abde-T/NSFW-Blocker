@@ -24,6 +24,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Toggle switch listener
+  const toggleSwitch = document.querySelector(
+    ".toggle-switch input[type='checkbox']"
+  );
+
+  toggleSwitch.addEventListener("change", () => {
+    localStorage.setItem("blockerEnabled", JSON.stringify(toggleSwitch.checked));
+    if (toggleSwitch.checked) {
+      showModal("Blocker functions have been enabled.");
+    } else {
+      showModal("Blocker functions have been disabled.");
+    }
+  });
+
   // Helper functions
   const getById = (id) => document.getElementById(id);
   const saveToStorage = (key, value, callback = () => {}) => {

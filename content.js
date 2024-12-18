@@ -1,6 +1,20 @@
+// Function to dynamically get blockerEnabled
+function isBlockerEnabled() {
+  console.log('isBlockerEnabled',JSON.parse(localStorage.getItem("blockerEnabled")))
+  return JSON.parse(localStorage.getItem("blockerEnabled")) ?? true; // Default to true if null
+}
+
+// Storage event listener to update on localStorage changes across tabs
+window.addEventListener("storage", (event) => {
+  if (event.key === "blockerEnabled") {
+    console.log("blockerEnabled updated in another tab:", event.newValue);
+    handleBlockerState();
+  }
+});
+
 // Function to fetch blocked words
 async function fetchBlockedWords() {
-  if (chrome?.runtime?.id) {
+  if (chrome?.runtime?.id && isBlockerEnabled()) {
     const fileURL = chrome.runtime.getURL("nsfw-words.json");
     try {
       // Fetch blocked words from the JSON file
@@ -41,7 +55,7 @@ async function fetchBlockedWords() {
 }
 // Function to fetch blocked URLs
 async function fetchBlockedUrls() {
-  if (chrome?.runtime?.id) {
+  if (chrome?.runtime?.id && isBlockerEnabled()) {
     const fileURL = chrome.runtime.getURL("nsfw-urls.json");
     try {
       // Fetch blocked URLs from the JSON file
@@ -100,6 +114,7 @@ function blurElement(element) {
   if (element && element.style) {
     element.style.filter = "blur(8px)";
     element.style.pointerEvents = "none";
+    element.style.cursor = "not-allowed";
     element.title = "Blocked Content";
   }
 }
@@ -116,8 +131,6 @@ async function redirectIfOnBlockedSite() {
     const normalizedBlockedUrl = blockedUrl.toLowerCase();
     return currentHostname === normalizedBlockedUrl;
   });
-  console.log("block", isBlocked);
-
   if (isBlocked) {
     window.location.href = chrome.runtime.getURL("blocked.html"); // Redirect to the warning page
   }
@@ -138,7 +151,6 @@ async function scanForBlockedURLs() {
       });
 
       if (isBlocked) {
-        console.log(`Blocked link detected: ${link.href}`);
         link.addEventListener("click", (event) => {
           event.preventDefault(); // Prevent navigation
           console.log(`Redirecting from blocked link: ${link.href}`);
@@ -146,7 +158,10 @@ async function scanForBlockedURLs() {
         });
 
         // Optional: Blur or visually mark blocked links
-        blurElement(link);
+        if (!link.hasAttribute("data-blocked-url")) {
+          link.setAttribute("data-blocked-url", "true");
+          blurElement(link);
+        }
       }
     } catch (error) {
       // Handle invalid URLs gracefully
@@ -178,17 +193,10 @@ async function scanForBlockedWords() {
       const originalText = node.nodeValue;
 
       if (wordRegex.test(originalText)) {
-        const blurredHTML = originalText.replace(wordRegex, (match) => {
-          return `<span class="blurred-word" title="Blocked">${match}</span>`;
-        });
-
         const parentElement = node.parentNode;
-
-        // Ensure the parent node exists
-        if (parentElement) {
-          const newElement = document.createElement("span");
-          newElement.innerHTML = blurredHTML;
-          parentElement?.replaceChild(newElement, node);
+        if (parentElement && !parentElement.hasAttribute("data-blocked-word")) {
+          parentElement.setAttribute("data-blocked-word", "true");
+          blurElement(parentElement);
         }
       }
     }
@@ -272,7 +280,7 @@ function blurImage(element) {
   button.style.cursor = "pointer";
   button.style.borderRadius = "5px";
 
-  // Add event listener to unblur the image when the button is clicked
+  // Add event listener to un-blur the image when the button is clicked
   button.addEventListener("click", (event) => {
     blurredImage.style.filter = "none";
     button.style.display = "none";
@@ -287,18 +295,6 @@ function blurImage(element) {
   wrapper.appendChild(button);
 }
 
-// Add CSS for blurred words
-const style = document.createElement("style");
-style.textContent = `
-    .blurred-word {
-      filter: blur(5px);
-      cursor: not-allowed;
-      pointer-events: none;
-      user-select: none;
-    }
-  `;
-document.head.appendChild(style);
-
 // Throttling function to avoid frequent re-scans
 function throttle(fn, delay) {
   let lastCall = 0;
@@ -311,15 +307,16 @@ function throttle(fn, delay) {
   };
 }
 
-// Scan the page initially
-scanForBlockedWords();
-
 // Monitor changes to the page for dynamic content (e.g., infinite scrolling)
 const observer = new MutationObserver(
   throttle(async () => {
-    await redirectIfOnBlockedSite(); // Check if the user is already on a blocked site
-    scanForBlockedWords();
-    await scanForBlockedURLs(); // Scan and handle blocked URLs in links
+    if (isBlockerEnabled()) {
+      await redirectIfOnBlockedSite();
+      await scanForBlockedURLs();
+      scanForBlockedWords();
+    } else {
+      console.error("blocker is disabled");
+    }
   }, 500) // Throttle scans to once every 500ms
 );
 observer.observe(document.body, { childList: true, subtree: true });
